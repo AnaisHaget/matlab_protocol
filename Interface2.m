@@ -77,6 +77,8 @@ guidata(hObject,handles);
 
 global FlagCalib Xrangecalib Yrangecalib Prangecalib Xmincalib Ymincalib Pmaxcalib;
 global    Xmaxcalib Ymaxcalib Pmincalib;
+global record;
+record = false;
 FlagCalib = 0;
 Xrangecalib = [];
 Yrangecalib = [];
@@ -382,16 +384,24 @@ function pushbutton_start_Record_Callback(hObject, eventdata, handles)
     global Targets Targets_Pos Duration_Pause;
     global TimeStep;
     global flagReach;
-    handles.record = true;
+    global DisplacementReach DisplacementStatic;
+    global RecordDisplacement;
+    global Comput_metrics;
+    global record;
+    DisplacementReach =[];
+    DisplacementStatic = [];
+    record = true;
     guidata(hObject,handles);
     % move(hObject,handles);
     i = 1;
     step = 1;
     T = Display_Cursor(Targets_Pos(:,i), handles.Mode_Visual, 'Line', handles.xpos, handles.xwidth, handles.ypos, handles.yheight );
+    time_record = clock;
     set(T,'Color',[25,25,112]./255);
     Epsilon = 0.5;
     Epsilon_time = 0.0001;
     t_reach = [];
+    t_static = [];
     flagReach = 0;
 %     tInit = TimeStep;
     Reached_text = text(19,10,' !! Target Reached !!','Color','r','FontWeight','Bold','FontSize',16,'Visible','off');
@@ -437,22 +447,56 @@ function pushbutton_start_Record_Callback(hObject, eventdata, handles)
             end
             step =1;
             if (etime(clock,t_reach)>=Duration_Pause)
+                t_static = clock;
                 if (i+1 <= length(Targets))
                     Update_Cursor(handles.Mode_Visual, 'Line', T, Targets_Pos(:,i+1), handles.C_dim, handles.C_shift, handles.C_align_v);
                     set(T,'Color',[25,25,112]./255);
                     set(Reached_text,'Visible','off');
                     set(Count_Down,'Visible','off');
                     set(Count_Down,'String',num2str(10));
+                    RecordDisplacement{i,1} = DisplacementReach;
+                    RecordDisplacement{i,2} = DisplacementStatic;
+                    RecordDisplacement{i,3} = t_reach;
+                    RecordDisplacement{i,4} = t_static;
+                    disp(RecordDisplacement)
+%                     disp(RecordDisplacement{1,1})
+%                     disp(RecordDisplacement{1,2})
+%                     disp(RecordDisplacement{1,3})
+%                     disp(RecordDisplacement{1,4})
+%                     Comput_
+metrics{i} = Initialise_Metrics( handles.Mode_Visual, str2double(get(handles.edit2_targets,'String')) );
+%                     if i == 1
+%                         Comput_metrics{i} = Metrics( Comput_metrics, handles.Mode_Visual,Current_Target( handles.Mode_Visual,Targets_Pos,1),time_record, t_reach,DisplacementReach, DisplacementStatic );
+%                     elseif i-1>=1
+%                         Comput_metrics{i} = Metrics( Comput_metrics, handles.Mode_Visual,Current_Target( handles.Mode_Visual,Targets_Pos,1),RecordDisplacement{i-1,4}, t_reach,DisplacementReach, DisplacementStatic );
+%                     end
                     t_reach = [];
+                    t_static = [];
                     flagReach = 0;
+                    DisplacementReach =[];
+                    DisplacementStatic = [];                  
                     i=i+1;
                 elseif (i+1 > length(Targets))
-                    i=i+2;
+                    RecordDisplacement{i,1} = DisplacementReach;
+                    RecordDisplacement{i,2} = DisplacementStatic;
+                    RecordDisplacement{i,3} = t_reach;
+                    RecordDisplacement{i,4} = t_static;
+%                     Comput_metrics{i} = Initialise_Metrics( handles.Mode_Visual, str2double(get(handles.edit2_targets,'String')) );
+%                     if i == 1
+%                         Comput_metrics{i} = Metrics( Comput_metrics, handles.Mode_Visual,Current_Target( handles.Mode_Visual,Targets_Pos,i),time_record, t_reach,DisplacementReach, DisplacementStatic );
+%                     elseif i-1>=1
+%                         Comput_metrics{i} = Metrics( Comput_metrics, handles.Mode_Visual,Current_Target( handles.Mode_Visual,Targets_Pos,i),RecordDisplacement{i-1,4}, t_reach,DisplacementReach, DisplacementStatic );
+%                     end
                     t_reach = [];
+                    t_static = [];
                     flagReach = 0;
                     set(Reached_text,'Visible','off');
                     set(Count_Down,'Visible','off');
                     set(Count_Down,'String',num2str(10));
+                    DisplacementReach =[];
+                    DisplacementStatic = [];
+%                     disp(Comput_metrics{i})
+                    i=i+2;
                 end
             end
         end
@@ -465,6 +509,7 @@ function pushbutton_end_Record_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
     handles = guidata(hObject);
+    global record;
     handles.record = false;
     guidata(hObject,handles);
 
@@ -534,16 +579,23 @@ function move(hObject,handles)
     
 function callback(msg,hObject,handles)
     global X Y P Memory TimeStep;
+    global DisplacementReach DisplacementStatic;
     global FlagCalib flagReach;
+    global record;
     X = msg.LatestMessage.Pose.Position.X;
     Y = msg.LatestMessage.Pose.Position.Y;
     P = msg.LatestMessage.Pose.Orientation.X;
-    %stamp = msg.LatestMessage.Header.Stamp;
-    %TimeStep = stamp.Sec+1e-9*stamp.Nsec;
+    stamp = msg.LatestMessage.Header.Stamp;
+    TimeStep = stamp.Sec+1e-9*stamp.Nsec;
     if (FlagCalib == 1)
         Memory = [Memory; X Y P];
     end
-
+    if (record == true) && (flagReach == 0)
+        DisplacementReach = [DisplacementReach; X Y P];
+    elseif (record == true) && (flagReach == 1)
+        DisplacementStatic = [DisplacementStatic; X Y P];
+    end
+    
 function [Position] = CursorPosition(hObject,handles)
     handles = guidata(hObject);
     global X Y P FlagCalib;
